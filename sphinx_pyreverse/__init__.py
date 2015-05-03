@@ -8,6 +8,7 @@ from docutils.parsers.rst import directives
 from sphinx.util.compat import Directive
 from subprocess import call
 import os
+import sys
 
 try:
     from PIL import Image as IMAGE
@@ -24,7 +25,7 @@ except ImportError, error:
 class UMLGenerateDirective(Directive):
     """UML directive to generate a pyreverse diagram"""
     required_arguments = 1
-    optional_arguments = 0
+    optional_arguments = 99
     has_content = False
     DIR_NAME = "uml_images"
 
@@ -36,11 +37,26 @@ class UMLGenerateDirective(Directive):
         if os.path.basename(uml_dir) not in os.listdir(src_dir):
             os.mkdir(uml_dir)
         env.uml_dir = uml_dir
-        module_path = self.arguments[0]
         os.chdir(uml_dir)
-        basename = os.path.basename(module_path).split(".")[0]
-        print call(['pyreverse', '-o', 'png', '-p', basename,
-                    os.path.abspath(os.path.join(src_dir, module_path))])
+
+        module_paths = [i for i in self.arguments if not i.startswith('-')]
+        cmd_opts = [i for i in self.arguments if i.startswith('-')]
+        basename = module_paths[0]
+        if '/' in basename:
+            basename, _ = os.path.splitext(os.path.basename(basename))
+
+        pyreverse_cmd = os.path.join(os.path.dirname(sys.executable), 'pyreverse')
+        if not os.path.exists(pyreverse_cmd):
+            pyreverse_cmd = 'pyreverse'
+        pyreverse_cmd = [pyreverse_cmd, '-o', 'png']
+        if '-p' not in cmd_opts:
+            pyreverse_cmd.extend(['-p', basename])
+        pyreverse_cmd.extend(cmd_opts)
+        pyreverse_cmd.extend([
+            (os.path.abspath(os.path.join(src_dir, i)) if '/' in i else i)
+            for i in module_paths])
+        print "Calling '%s'..." % ' '.join(pyreverse_cmd)
+        print call(pyreverse_cmd)
         uri = directives.uri(os.path.join(self.DIR_NAME,
                                           "classes_{0}.png".format(basename)))
         scale = 100
